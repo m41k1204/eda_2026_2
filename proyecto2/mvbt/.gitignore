@@ -1,0 +1,4 @@
+test
+bench
+*.exe
+__pycache__/
