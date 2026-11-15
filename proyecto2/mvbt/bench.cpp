@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cassert>
 #include <cstdio>
 #include <random>
 #include <vector>
@@ -89,6 +90,7 @@ int log_ceil(int m, int d) {
 
 // Costo de busqueda y actualizacion con N creciente y m fijo
 void exp_costos() {
+    rng.seed(1);
     FILE* f = fopen("results/costos.csv", "w");
     fprintf(f, "N,m,busq_prom,busq_max,busq_vieja_prom,act_prom,act_max,cota_busq,cota_act\n");
     for (int m : {1000, 10000}) {
@@ -128,38 +130,96 @@ void exp_costos() {
     fclose(f);
 }
 
-// E/S de consultas por rango en un arbol de 100000 claves
 void exp_rango() {
+    rng.seed(2);
     FILE* f = fopen("results/rango.csv", "w");
-    fprintf(f, "r,io_prom,cota\n");
-    int m = 100000;
-    Corrida c(25, 5, 4);
-    vector<int> ks(m);
-    for (int i = 0; i < m; i++) ks[i] = i;
-    shuffle(ks.begin(), ks.end(), rng);
-    for (int k : ks) c.ins(k);
-    for (int r : {10, 100, 1000, 10000}) {
-        Acum a;
-        for (int i = 0; i < 200; i++) {
-            int lo = rng() % (m - r);
-            auto res = c.t.range(lo, lo + r - 1, c.t.now);
-            assert((int)res.size() == r);
-            a.add(c.t.disk.cost());
+    fprintf(f, "b,d,ancho,r_prom,mvbt_actual,mvbt_pasada,bptree,cota\n");
+    int m = 100000, universe = 2 * m;
+    for (int b : {25, 100}) {
+        int d = b / 5, ed = d - 1;
+        Corrida c(b, d, ed);
+        vector<int> keys;
+        auto insert_new_key = [&]() {
+            while (true) {
+                int k = rng() % universe;
+                if (c.ins(k)) {
+                    keys.push_back(k);
+                    return;
+                }
+            }
+        };
+        for (int i = 0; i < m; i++) insert_new_key();
+        int first_full_version = c.t.now;
+        for (int i = 0; i < m / 2; i++) {
+            int position = rng() % keys.size();
+            c.del(keys[position]);
+            keys[position] = keys.back();
+            keys.pop_back();
+            insert_new_key();
         }
-        fprintf(f, "%d,%.2f,%.2f\n", r, a.prom(), log_ceil(m, 5) + r / 5.0);
+        for (int width : {20, 200, 2000, 20000}) {
+            Acum current, past, single_version;
+            long long results = 0;
+            int queries = 200;
+            for (int i = 0; i < queries; i++) {
+                int lo = rng() % (universe - width), hi = lo + width - 1;
+                auto found = c.t.range(lo, hi, c.t.now);
+                current.add(c.t.disk.cost());
+                results += found.size();
+                auto found_single = c.bp.range(lo, hi);
+                single_version.add(c.bp.disk.cost());
+                assert(found == found_single);
+                int version = first_full_version + rng() % (c.t.now - first_full_version + 1);
+                c.t.range(lo, hi, version);
+                past.add(c.t.disk.cost());
+            }
+            double mean_results = (double)results / queries;
+            fprintf(f, "%d,%d,%d,%.1f,%.2f,%.2f,%.2f,%.2f\n", b, d, width, mean_results, current.prom(), past.prom(),
+                    single_version.prom(), log_ceil(m, d) + mean_results / d);
+        }
+    }
+    fclose(f);
+}
+
+void exp_epsilon() {
+    rng.seed(5);
+    FILE* f = fopen("results/epsilon.csv", "w");
+    fprintf(f, "b,d,ed,k,epsilon,carga,redundancia,cota_redundancia,bloques_por_N_b,altura,busq_prom,act_prom,act_max\n");
+    int n = 100000, b = 25;
+    const char* workloads[2] = {"insercion_aleatoria", "mixta"};
+    for (int d : {3, 4, 5, 6, 8}) {
+        for (int ed = 1; ed <= d - 1 && 2 * d + 3 * ed - 1 <= b; ed++) {
+            for (int j = 0; j < 2; j++) {
+                Corrida c(b, d, ed);
+                if (j == 0) {
+                    vector<int> keys(n);
+                    for (int i = 0; i < n; i++) keys[i] = i;
+                    shuffle(keys.begin(), keys.end(), rng);
+                    for (int k : keys) c.ins(k);
+                } else {
+                    while (c.t.now < n) c.paso_mixto(20000);
+                }
+                Stats stats = c.t.stats();
+                Acum searches = c.busquedas(1000, j == 0 ? n : 20000, false);
+                fprintf(f, "%d,%d,%d,%.2f,%.2f,%s,%.3f,%.2f,%.3f,%d,%.2f,%.2f,%d\n", b, d, ed, (double)b / d, (double)ed / d,
+                        workloads[j], (double)stats.leaf_entries / c.inserts, 2.0 * b / ed,
+                        (double)stats.blocks / ((double)n / b), stats.height, searches.prom(), c.act.prom(), c.act.mx);
+            }
+        }
     }
     fclose(f);
 }
 
 // Uso de disco con carga mixta de 100000 actualizaciones
 void exp_espacio() {
+    rng.seed(3);
     FILE* f = fopen("results/espacio.csv", "w");
-    fprintf(f, "N,bloques,bloques_vivos,cota_N_b,raices,redundancia,bloques_bptree\n");
+    fprintf(f, "N,bloques,bloques_vivos,referencia_N_b,bloques_por_N_b,raices,redundancia,bloques_bptree\n");
     Corrida c(25, 5, 4);
     for (int n = 5000; n <= 100000; n += 5000) {
         while (c.t.now < n) c.paso_mixto(20000);
         Stats s = c.t.stats();
-        fprintf(f, "%d,%d,%d,%.2f,%d,%.3f,%d\n", n, s.blocks, s.live_blocks, n / 25.0, s.roots,
+        fprintf(f, "%d,%d,%d,%.2f,%.3f,%d,%.3f,%d\n", n, s.blocks, s.live_blocks, n / 25.0, s.blocks / (n / 25.0), s.roots,
                 (double)s.leaf_entries / c.inserts, c.bp.blocks());
     }
     fclose(f);
@@ -168,6 +228,7 @@ void exp_espacio() {
 // Redundancia, espacio y costos segun b y tipo de carga (N = 100000 actualizaciones); las cargas aleatoria
 // y mixta tambien comparan con el B+-tree en bptree.csv
 void exp_parametros() {
+    rng.seed(4);
     FILE* f = fopen("results/parametros.csv", "w");
     FILE* g = fopen("results/bptree.csv", "w");
     fprintf(f, "b,d,ed,carga,redundancia,bloques_por_N_b,busq_prom,act_prom\n");
@@ -213,4 +274,6 @@ int main() {
     printf("results/espacio.csv\n");
     exp_parametros();
     printf("results/parametros.csv\nresults/bptree.csv\n");
+    exp_epsilon();
+    printf("results/epsilon.csv\n");
 }
