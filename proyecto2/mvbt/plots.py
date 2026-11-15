@@ -34,6 +34,7 @@ for a in ax:
     a.legend(fontsize=7)
 fig.tight_layout()
 fig.savefig("results/costos.png", dpi=120)
+fig.savefig("results/costos.pdf")
 plt.close(fig)
 
 # rango.csv: E/S vs r para cada b, en la version actual, en versiones pasadas y en el B+-tree
@@ -55,6 +56,7 @@ for eje, valor_b in zip(ax, valores_b):
     eje.legend(fontsize=8)
 fig.tight_layout()
 fig.savefig("results/rango.png", dpi=120)
+fig.savefig("results/rango.pdf")
 plt.close(fig)
 
 # espacio.csv: bloques vs N
@@ -70,6 +72,7 @@ ax.set_ylabel("bloques")
 ax.legend()
 fig.tight_layout()
 fig.savefig("results/espacio.png", dpi=120)
+fig.savefig("results/espacio.pdf")
 plt.close(fig)
 
 # parametros.csv: redundancia por b y carga
@@ -91,6 +94,7 @@ ax.set_ylabel("redundancia")
 ax.legend(fontsize=8)
 fig.tight_layout()
 fig.savefig("results/parametros.png", dpi=120)
+fig.savefig("results/parametros.pdf")
 plt.close(fig)
 
 # bptree.csv: MVBT vs B+-tree por b (continuo = aleatoria, punteado = mixta)
@@ -110,6 +114,7 @@ ax[2].set_yscale("log")
 ax[0].legend(fontsize=7)
 fig.tight_layout()
 fig.savefig("results/bptree.png", dpi=120)
+fig.savefig("results/bptree.pdf")
 plt.close(fig)
 
 # epsilon.csv: redundancia y bloques por N/b contra epsilon, una linea por d (b = 25)
@@ -127,4 +132,5 @@ for eje, carga in zip(ax, ("insercion_aleatoria", "mixta")):
     eje.legend(fontsize=8, loc="lower right")
 fig.tight_layout()
 fig.savefig("results/epsilon.png", dpi=120)
+fig.savefig("results/epsilon.pdf")
 plt.close(fig)
