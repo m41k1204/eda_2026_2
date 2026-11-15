@@ -201,7 +201,7 @@ void costos(int b, int d, int ed) {
         int k = p.rng() % 2000, antes = p.vivo.size();
         bool hizo = p.rng() % 2 ? p.ins(k) : p.del(k);
         if (hizo) {
-            int cota = 5 * log_ceil(max(antes, (int)p.vivo.size()), d) + 5;
+            int cota = 5 * max(1, log_ceil(max(antes, (int)p.vivo.size()), d));
             if (p.t.disk.cost() > cota) {
                 printf("FALLA costos act: op %d, m=%d, costo=%d, cota=%d\n", i, antes, p.t.disk.cost(), cota);
                 assert(false);
@@ -211,7 +211,7 @@ void costos(int b, int d, int ed) {
         for (int q = 0; q < 10; q++) {
             int kk = p.rng() % 2000, v = p.rng() % (p.t.now + 1), val;
             p.t.find(kk, v, val);
-            int cota = log_ceil(p.size_en(v), d) + 1;
+            int cota = max(1, log_ceil(p.size_en(v), d));
             if (p.t.disk.cost() > cota) {
                 printf("FALLA costos busq: v=%d, m_v=%d, costo=%d, cota=%d\n", v, p.size_en(v), p.t.disk.cost(), cota);
                 assert(false);
@@ -219,6 +219,23 @@ void costos(int b, int d, int ed) {
         }
     }
     ok("costos", b, d, ed);
+}
+
+void condicion_fuerte(int b, int d, int ed) {
+    Prueba p(b, d, ed);
+    for (int i = 0; i < 20000; i++) {
+        int k = p.rng() % 2000, bloques_antes = p.t.disk.blocks.size();
+        bool hizo = p.rng() % 3 ? p.ins(k) : p.del(k);
+        if (!hizo) continue;
+        int raiz = p.t.roots.back().second;
+        for (int id = bloques_antes; id < (int)p.t.disk.blocks.size(); id++) {
+            if (id == raiz) continue;
+            int vivas = count_alive(p.t.disk.blocks[id], p.t.now);
+            assert(d + ed <= vivas && vivas <= b - ed);
+        }
+    }
+    for (int v = 0; v <= p.t.now; v += 7) assert(p.t.check_version(v));
+    ok("condicion_fuerte", b, d, ed);
 }
 
 // Compara (clave, in, del) de las entradas ignorando el orden y val
@@ -395,6 +412,8 @@ void bptree_vs_set(int b, int d) {
             for (auto& [kk, x] : ref)
                 if (lo <= kk && kk <= hi) esp.push_back({kk, x});
             assert(t.range(lo, hi) == esp);
+            int hojas = (int)esp.size() / d + 2;
+            assert(t.disk.cost() <= max(1, log_ceil(ref.size(), d)) + hojas);
         }
     }
     for (int k = 0; k < 2000; k++) t.erase(k);
@@ -411,7 +430,10 @@ int main() {
         borrar_todo(q[0], q[1], q[2]);
         merge_hermano(q[0], q[1], q[2]);
         costos(q[0], q[1], q[2]);
+        condicion_fuerte(q[0], q[1], q[2]);
     }
+    condicion_fuerte(11, 3, 2);
+    condicion_fuerte(22, 5, 4);
     raiz_casos();
     fig1();
     fig2();

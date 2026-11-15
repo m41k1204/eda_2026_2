@@ -36,6 +36,7 @@ struct MVBT {
     vector<pair<int, int>> roots;  // (version desde la que vale, id de la raiz)
 
     MVBT(int b = 25, int d = 5, int ed = 4) : b(b), d(d), ed(ed) {
+        assert(d >= 2 && ed >= 1);
         assert(b >= 2 * d + 3 * ed - 1);
         assert(ed <= d - 1);
         roots.push_back({0, disk.alloc({true, false, {}})});

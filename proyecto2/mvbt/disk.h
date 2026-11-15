@@ -7,7 +7,7 @@ using namespace std;
 const int INF = INT_MAX;
 
 struct Entry { int key, in, del, val; };
-struct Node { bool leaf; bool dead; vector<Entry> e; };
+struct Node { bool leaf; bool dead; vector<Entry> e; int next = -1; };
 
 struct Disk {
     vector<Node> blocks;

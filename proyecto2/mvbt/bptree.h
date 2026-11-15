@@ -11,7 +11,8 @@ int idx_hijo(const Node& n, int k) {
     return i;
 }
 
-// B+-tree de una sola version sobre el mismo disco; los bloques liberados quedan con dead = true
+// B+-tree de una sola version sobre el mismo disco; las hojas se enlazan con next y los bloques
+// liberados quedan con dead = true
 struct BPT {
     Disk disk;
     int b, d, root;
@@ -40,24 +41,23 @@ struct BPT {
         }
     }
 
-    void range_rec(int id, int lo, int hi, vector<pair<int, int>>& out) {
-        Node& n = disk.get(id);
-        for (int j = 0; j < (int)n.e.size(); j++) {
-            if (n.leaf) {
-                if (lo <= n.e[j].key && n.e[j].key <= hi) out.push_back({n.e[j].key, n.e[j].val});
-                continue;
-            }
-            // el hijo j cubre [router_j, router_j+1)
-            bool last = j + 1 == (int)n.e.size();
-            if (n.e[j].key <= hi && (last || n.e[j + 1].key > lo)) range_rec(n.e[j].val, lo, hi, out);
-        }
-    }
-
-    // O(log_d n + r/d) E/S
+    // O(log_d n + r/d) E/S: baja a la hoja de lo y avanza por los punteros entre hojas
     vector<pair<int, int>> range(int lo, int hi) {
         disk.begin();
         vector<pair<int, int>> out;
-        range_rec(root, lo, hi, out);
+        int id = root;
+        while (!disk.get(id).leaf) {
+            Node& n = disk.get(id);
+            id = n.e[idx_hijo(n, lo)].val;
+        }
+        while (id != -1) {
+            Node& n = disk.get(id);
+            for (const Entry& x : n.e) {
+                if (x.key > hi) return out;
+                if (x.key >= lo) out.push_back({x.key, x.val});
+            }
+            id = n.next;
+        }
         return out;
     }
 
@@ -92,7 +92,9 @@ struct BPT {
             n.e.resize(h);
             bool is_leaf = n.leaf;
             int router = right[0].key;
-            int id = disk.alloc({is_leaf, false, right});
+            int next_leaf = n.next;
+            int id = disk.alloc({is_leaf, false, right, next_leaf});
+            if (is_leaf) disk.get(path[l]).next = id;
             if (l == 0) {
                 vector<Entry> es = {{INT_MIN, 0, INF, path[0]}, {router, 0, INF, id}};
                 root = disk.alloc({false, false, es});
@@ -138,6 +140,7 @@ struct BPT {
             Node& left = disk.get(p.e[li].val);
             Node& right = disk.get(p.e[ri].val);
             left.e.insert(left.e.end(), right.e.begin(), right.e.end());
+            left.next = right.next;
             right.dead = true;
             p.e.erase(p.e.begin() + ri);
         }
@@ -161,11 +164,16 @@ struct BPT {
     // Solo para pruebas
     bool check() {
         int seen = 0, leaf_depth = -1;
-        if (!check_rec(root, INT_MIN, INF, true, 0, leaf_depth, seen)) return false;
+        vector<int> leaves;
+        if (!check_rec(root, INT_MIN, INF, true, 0, leaf_depth, seen, leaves)) return false;
+        for (int i = 0; i < (int)leaves.size(); i++) {
+            int expected_next = i + 1 < (int)leaves.size() ? leaves[i + 1] : -1;
+            if (disk.blocks[leaves[i]].next != expected_next) return false;
+        }
         return seen == blocks();
     }
 
-    bool check_rec(int id, int lo, int hi, bool is_root, int depth, int& leaf_depth, int& seen) {
+    bool check_rec(int id, int lo, int hi, bool is_root, int depth, int& leaf_depth, int& seen, vector<int>& leaves) {
         const Node& n = disk.blocks[id];
         seen++;
         int m = n.e.size();
@@ -175,13 +183,14 @@ struct BPT {
             if (i > 0 && n.e[i - 1].key >= n.e[i].key) return false;
         }
         if (n.leaf) {
+            leaves.push_back(id);
             if (leaf_depth == -1) leaf_depth = depth;
             return leaf_depth == depth;
         }
         if ((is_root && m < 2) || n.e[0].key != lo) return false;
         for (int j = 0; j < m; j++) {
             int next = j + 1 < m ? n.e[j + 1].key : hi;
-            if (!check_rec(n.e[j].val, n.e[j].key, next, false, depth + 1, leaf_depth, seen)) return false;
+            if (!check_rec(n.e[j].val, n.e[j].key, next, false, depth + 1, leaf_depth, seen, leaves)) return false;
         }
         return true;
     }
