@@ -28,8 +28,9 @@ struct Corrida {
     BPT bp;
     Acum act, act_bp;
     long long inserts = 0;
+    mt19937 carga;
 
-    Corrida(int b, int d, int ed) : t(b, d, ed), bp(b, d) {}
+    Corrida(int b, int d, int ed) : t(b, d, ed), bp(b, d), carga(7) {}
 
     bool ins(int k) {
         if (!t.insert(k, t.now + 1)) return false;
@@ -61,8 +62,8 @@ struct Corrida {
 
     // Una operacion al azar sobre claves en [0, u): 50% insert, 50% delete
     void paso_mixto(int u) {
-        int k = rng() % u;
-        if (rng() % 2) ins(k);
+        int k = carga() % u;
+        if (carga() % 2) ins(k);
         else del(k);
     }
 
@@ -99,7 +100,7 @@ void exp_costos() {
         vector<int> keys;
         auto nueva = [&]() {
             while (true) {
-                int k = rng() % u;
+                int k = c.carga() % u;
                 if (c.ins(k)) {
                     keys.push_back(k);
                     return;
@@ -110,7 +111,7 @@ void exp_costos() {
         bool borrar = true;
         for (int n = m + 1; n <= 200000; n++) {
             if (borrar) {
-                int i = rng() % keys.size();
+                int i = c.carga() % keys.size();
                 c.del(keys[i]);
                 keys[i] = keys.back();
                 keys.pop_back();
@@ -141,7 +142,7 @@ void exp_rango() {
         vector<int> keys;
         auto insert_new_key = [&]() {
             while (true) {
-                int k = rng() % universe;
+                int k = c.carga() % universe;
                 if (c.ins(k)) {
                     keys.push_back(k);
                     return;
@@ -151,7 +152,7 @@ void exp_rango() {
         for (int i = 0; i < m; i++) insert_new_key();
         int first_full_version = c.t.now;
         for (int i = 0; i < m / 2; i++) {
-            int position = rng() % keys.size();
+            int position = c.carga() % keys.size();
             c.del(keys[position]);
             keys[position] = keys.back();
             keys.pop_back();
@@ -194,7 +195,7 @@ void exp_epsilon() {
                 if (j == 0) {
                     vector<int> keys(n);
                     for (int i = 0; i < n; i++) keys[i] = i;
-                    shuffle(keys.begin(), keys.end(), rng);
+                    shuffle(keys.begin(), keys.end(), c.carga);
                     for (int k : keys) c.ins(k);
                 } else {
                     while (c.t.now < n) c.paso_mixto(20000);
@@ -241,7 +242,7 @@ void exp_parametros() {
             Corrida c(b, d, ed);
             vector<int> ks(n);
             for (int i = 0; i < n; i++) ks[i] = i;
-            shuffle(ks.begin(), ks.end(), rng);
+            if (j == 0 || j == 3) shuffle(ks.begin(), ks.end(), c.carga);
             if (j == 0) {
                 for (int k : ks) c.ins(k);
             } else if (j == 1) {

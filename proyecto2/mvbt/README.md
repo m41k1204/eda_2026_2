@@ -19,7 +19,7 @@ make results    # corre el benchmark (results/*.csv, unos segundos) y genera res
 ```
 
 Sin make: `g++ -std=c++17 -O2 -Wall test.cpp -o test && ./test`, lo mismo con `bench.cpp`, y `python3 plots.py`.
-Cada experimento fija su propia semilla, asi que los CSV son reproducibles.
+Cada corrida genera su carga con un generador propio de semilla fija y las consultas usan otro generador, asi que una misma carga es identica en todos los experimentos y para cualquier b, d y ed (por ejemplo, b = 25, d = 5, ed = 4 da la misma redundancia en `parametros`, `epsilon` y `espacio`). Los CSV son reproducibles.
 
 Parametros por defecto: `b = 25, d = 5, ed = 4` (rango fuerte [9, 21]). Las pruebas pequenas usan `b = 6, d = 2, ed = 1`.
 El constructor exige `d >= 2`, `ed >= 1`, `b >= 2d + 3ed - 1` (3.1) y `ed <= d - 1` (3.2). La condicion `ed > 2` (d > 2/epsilon) solo
@@ -48,7 +48,7 @@ hace falta para la cota de espacio y no se exige: se cumple con b = 25, 50, 100 
 - Costo = numero de bloques distintos tocados en la operacion (`Disk::touched`), sin distinguir lecturas de escrituras: `costos` comprueba las cotas exactas del paper, busqueda <= ceil(log_d m_v) y actualizacion <= 5 ceil(log_d m), sin holgura.
 - Condicion fuerte: todo bloque nuevo que no es raiz nace con entre `d + ed` y `b - ed` entradas vivas: `condicion_fuerte`.
 - El rango del MVBT recorre el subarbol de la version (el MVBT no tiene punteros entre hojas, porque una hoja pertenece a varias versiones); el del B+-tree avanza por `next`.
-- Redundancia = entradas almacenadas en todas las hojas (vivas y muertas) / numero de inserts. El paper reporta "registros redundantes por clave" (1.31 a 1.70), que equivale a `redundancia - 1`. Con b = 25 salen 1.40 (mixta) y 1.48 (insercion aleatoria), dentro del rango; la secuencial (2.00) y insertar_y_borrar (2.18) quedan por encima, son cargas que el paper no describe.
+- Redundancia = entradas almacenadas en todas las hojas (vivas y muertas) / numero de inserts. El paper reporta "registros redundantes por clave" (1.31 a 1.70), que equivale a `redundancia - 1`. Con b = 25 salen 1.42 (mixta) y 1.48 (insercion aleatoria), dentro del rango; la secuencial (2.00) y insertar_y_borrar (2.19) quedan por encima, son cargas que el paper no describe.
 - `ed > 2` no se exige (ver arriba).
 
 ## Figuras del paper
@@ -64,17 +64,17 @@ hace falta para la cota de espacio y no se exige: se cumple con b = 25, 50, 100 
 
 `espacio.csv` trae `bloques_bptree`: un B+-tree con los mismos `b` y `d` que recibe solo las operaciones con efecto en el MVBT. `bptree.csv` compara costos y bloques para b = 10, 25, 50 y 100 con cargas aleatoria y mixta.
 
-- Bloques vivos del MVBT contra bloques del B+-tree: desde 1% por debajo (b = 10, mixta: 2336 contra 2361) hasta 20% por encima (b = 100, mixta: 200 contra 167); con b = 25 y carga mixta, 873 contra 792 (10%).
+- Bloques vivos del MVBT contra bloques del B+-tree: entre 1% por encima (b = 50, aleatoria: 2970 contra 2952) y 14% por encima (b = 50, mixta: 408 contra 358); con b = 25 y carga mixta, 859 contra 806 (7%).
 - Busqueda en la version actual: el mismo numero de bloques en 7 de las 8 configuraciones. Con b = 25 e insercion aleatoria el MVBT tiene un nivel mas (5.00 contra 4.00), porque sus bloques nacen con a lo mas `b - ed = 21` entradas vivas.
-- Actualizacion: el MVBT toca a lo mas 6% mas bloques en promedio (b = 10, aleatoria: 6.12 contra 5.78; b = 25, mixta: 3.98 contra 3.88).
+- Actualizacion: el MVBT toca a lo mas 6% mas bloques en promedio (b = 10, aleatoria: 6.16 contra 5.85; b = 25, mixta: 3.98 contra 3.87).
 
 ## Resultados
 
 Un CSV y un PNG por experimento en `results/`:
 
 - `costos`: con m fijo, el costo de busqueda (3 bloques para m = 1000, 4 para m = 10000) no crece con N, ni en la version actual ni en versiones pasadas, y ninguna actualizacion supera 5 ceil(log_d m) (maximo observado: 10 contra una cota de 30).
-- `rango`: E/S contra el tamano del resultado para b = 25 y b = 100, en la version actual, en versiones pasadas al azar y en el B+-tree, sobre un arbol de 100000 claves con 100000 actualizaciones posteriores. Con b = 25 y r = 1000: 82.5 (actual), 76.6 (pasadas), 69.1 (B+-tree), contra log_d m + r/d = 208.
-- `espacio`: bloques totales del MVBT (nunca se liberan, asi que el total es tambien el pico), bloques vivos y bloques del B+-tree. `referencia_N_b` es N/b, una referencia y no una cota: el espacio es O(N/b) con una constante mayor que 1. `bloques_por_N_b` baja de 2.70 (N = 5000) a 1.50 (N = 100000).
+- `rango`: E/S contra el tamano del resultado para b = 25 y b = 100, en la version actual, en versiones pasadas al azar y en el B+-tree, sobre un arbol de 100000 claves con 100000 actualizaciones posteriores. Con b = 25 y r = 1000: 82.3 (actual), 77.3 (pasadas), 68.9 (B+-tree), contra log_d m + r/d = 208.
+- `espacio`: bloques totales del MVBT (nunca se liberan, asi que el total es tambien el pico), bloques vivos y bloques del B+-tree. `referencia_N_b` es N/b, una referencia y no una cota: el espacio es O(N/b) con una constante mayor que 1. `bloques_por_N_b` baja de 2.72 (N = 5000) a 1.50 (N = 100000).
 - `parametros`: redundancia, espacio y costos para b = 10, 25, 50, 100 (d = b/5, ed = d - 1) y cuatro cargas.
-- `epsilon`: con b = 25 fijo, todas las combinaciones validas de d en {3, 4, 5, 6, 8} y ed, con cargas aleatoria y mixta. Con solo inserciones epsilon no influye (redundancia 2.47 a 2.49). Con carga mixta la redundancia baja al crecer epsilon (d = 5: de 2.95 con epsilon = 0.2 a 2.41 con epsilon = 0.8), como predice el paper al recomendar epsilon maximo. `cota_redundancia` es la cota de peor caso 2k/epsilon (12.5 a 50), muy por encima de lo medido.
+- `epsilon`: con b = 25 fijo, todas las combinaciones validas de d en {3, 4, 5, 6, 8} y ed, con cargas aleatoria y mixta. Con solo inserciones epsilon no influye (redundancia 2.482 en todas las combinaciones). Con carga mixta la redundancia baja al crecer epsilon (d = 5: de 2.94 con epsilon = 0.2 a 2.42 con epsilon = 0.8), como predice el paper al recomendar epsilon maximo. `cota_redundancia` es la cota de peor caso 2k/epsilon (12.5 a 50), muy por encima de lo medido.
 - `bptree`: la comparacion de la seccion anterior.
